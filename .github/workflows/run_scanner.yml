@@ -2,8 +2,6 @@ name: Auto Scanner Bolas Global
 
 on:
   schedule:
-    # Se ejecutará cada hora desde las 14:00 hasta las 21:00 UTC 
-    # (Equivale de 9:00 AM a 4:00 PM hora de Lima) de lunes a viernes
     - cron: '0 14-21 * * 1-5'
   workflow_dispatch:
 
