@@ -27,31 +27,28 @@ def enviar_telegram(mensaje):
     except Exception as e:
         print(f"Error al despachar mensaje a Telegram: {e}")
 
-# 2. TU PORTAFOLIO OFICIAL (Base obligatoria de escaneo)
-portafolio_usuario = [
-    'CEG', 'ALAB', 'CRDO', 'BE', 'KLAC', 'GLD', 'MU', 'VST', 'VRT', 
+# 2. UNIVERSO MAESTRO GLOBAL PARA SELECCIÓN ALEATORIA Y LIBRE
+universo_maestro = [
+    'PENG', 'CEG', 'ALAB', 'CRDO', 'BE', 'KLAC', 'GLD', 'MU', 'VST', 'VRT', 
     'RKLB', 'AVGO', 'GOOGL', 'TSM', 'QQQM', 'FLEX', 'VTV', 'MELI', 
-    'SCHD', 'AMZN', 'VOO', 'LLY', 'NVDA', 'MSFT', 'CRWD'
+    'SCHD', 'AMZN', 'VOO', 'LLY', 'NVDA', 'MSFT', 'CRWD', 'AAPL', 'META', 
+    'TSLA', 'NFLX', 'AMD', 'INTC', 'JPM', 'XOM', 'CVX', 'IBM', 'RTX', 
+    'TQQQ', 'ARKK', 'SQ', 'COIN', 'SHOP', 'BA', 'DIS', 'PYPL', 'ADBE', 
+    'CRM', 'QCOM', 'TXN', 'INTU', 'AMAT', 'LMT', 'GE', 'PLTR', 'MRVL', 
+    'ARM', 'SMCI', 'ENPH', 'FSLR', 'CELH', 'HOOD', 'RDDT', 'PFE', 'JNJ',
+    'XPEV', 'NIO', 'BABA', 'PDD', 'VALE', 'PBR', 'ITUB', 'ABEV'
 ]
 
-# Pool complementario de alta liquidez para completar dinámicamente hasta 50 activos
-pool_complementario = [
-    'AAPL', 'META', 'TSLA', 'NFLX', 'AMD', 'INTC', 'JPM', 'XOM', 'CVX',
-    'IBM', 'RTX', 'TQQQ', 'ARKK', 'SQ', 'COIN', 'SHOP', 'BA', 'DIS',
-    'PYPL', 'ADBE', 'CRM', 'QCOM', 'TXN', 'INTU', 'AMAT', 'LMT', 'GE'
-]
-
-def obtener_universo_operativo():
-    """Combina estrictamente tu portafolio con una selección aleatoria para completar 50 activos."""
-    # Aseguramos que no se repitan elementos
-    extras_necesarios = max(0, 50 - len(portafolio_usuario))
-    seleccion_dinamica = random.sample(pool_complementario, min(extras_necesarios, len(pool_complementario)))
-    universo_total = list(set(portafolio_usuario + seleccion_dinamica))
-    return universo_total
+def obtener_universo_dinamico():
+    """Selecciona de forma libre y aleatoria 50 activos del mercado global en cada ciclo."""
+    cantidad_a_procesar = min(50, len(universo_maestro))
+    universo_seleccionado = random.sample(universo_maestro, cantidad_a_procesar)
+    print(f"Universo dinámico seleccionado para este ciclo ({len(universo_seleccionado)} activos): {universo_seleccionado}")
+    return universo_seleccionado
 
 # 3. MÓDULO DE TRADUCCIÓN AUTOMÁTICA AL ESPAÑOL
 def traducir_texto(texto):
-    """Traduce titulares al español mediante la API pública de MyMemory."""
+    """Traduce titulares al español mediante la API pública y gratuita de MyMemory."""
     if not texto:
         return texto
     try:
@@ -67,9 +64,9 @@ def traducir_texto(texto):
         pass
     return texto
 
-# 4. CAPA DE CATALIZADORES ESTRATÉGICOS Y SECTORIALES
+# 4. CAPA DE CATALIZADORES ESTRATÉGICOS LIBRES (GRATUITOS VÍA RSS)
 def obtener_catalizadores_estrategicos():
-    """Busca eventos de alto impacto, M&A, contratos y macroeconomía regional."""
+    """Busca eventos de alto impacto, M&A, contratos y macroeconomía regional en tiempo real."""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -99,13 +96,14 @@ def obtener_catalizadores_estrategicos():
             
     return catalizadores[:3]
 
-# 5. CAPA CUANTITATIVA DE BARRIDO DE MERCADO
-def barrido_mercado_global(universo):
+# 5. CAPA CUANTITATIVA DE BARRIDO EN TIEMPO REAL (DATOS GRATUITOS YFINANCE)
+def barrido_mercado_dinamico(universo):
     resultados = []
-    print(f"Iniciando auditoría cuantitativa sobre un universo combinado de {len(universo)} activos...")
+    print(f"Iniciando auditoría cuantitativa en tiempo real...")
 
     for ticker in universo:
         try:
+            # Usamos hhistoria optimizada de 90 días para calcular la media de 65 ruedas
             tk = yf.Ticker(ticker)
             hist = tk.history(period="90d")
             if hist is None or len(hist) < 65:
@@ -118,13 +116,12 @@ def barrido_mercado_global(universo):
                 ratio = volumen_actual / ma_volumen_65
                 precio_cierre = hist['Close'].iloc[-1]
 
+                # Filtro estricto de anomalía institucional (>1.2x)
                 if ratio >= 1.2:
-                    es_portafolio = "⭐ (Tu Portafolio)" if ticker in portafolio_usuario else "⚡ (Dinámico)"
                     resultados.append({
                         'ticker': ticker,
                         'precio': precio_cierre,
-                        'ratio': ratio,
-                        'etiqueta': es_portafolio
+                        'ratio': ratio
                     })
         except Exception as e:
             print(f"Advertencia procesando ticker {ticker}: {e}")
@@ -137,11 +134,11 @@ def main():
     peru_tz = ZoneInfo("America/Lima")
     ahora_peru = datetime.now(peru_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-    universo_actual = obtener_universo_operativo()
+    universo_dinamico = obtener_universo_dinamico()
     estrategicos = obtener_catalizadores_estrategicos()
-    anomalias = barrido_mercado_global(universo_actual)
+    anomalias = barrido_mercado_dinamico(universo_dinamico)
 
-    mensaje = f"🚨 *REPORTE DE INTELIGENCIA DE MERCADO* 🚨\n"
+    mensaje = f"🚨 *REPORTE DE INTELIGENCIA DE MERCADO (AUTÓNOMO)* 🚨\n"
     mensaje += f"⏱ Hora Lima: {ahora_peru}\n\n"
 
     # Sección 1: Catalizadores Estratégicos y Sectoriales
@@ -153,7 +150,7 @@ def main():
         mensaje += " • Sin eventos corporativos extraordinarios en este ciclo.\n"
     mensaje += "\n"
 
-    # Sección 2: Anomalías Cuantitativas (>1.2x)
+    # Sección 2: Anomalías Cuantitativas Dinámicas (>1.2x)
     mensaje += "📊 *Anomalías de Volumen Institucional (>1.2x):*\n"
     if anomalias:
         anomalias = sorted(anomalias, key=lambda x: x['ratio'], reverse=True)
@@ -161,8 +158,7 @@ def main():
             t = item['ticker']
             p = item['precio']
             r = item['ratio']
-            tag = item['etiqueta']
-            mensaje += f" 🔴 *{t}* {tag} | ${p:.2f} | Vol 3M: {r:.2f}x\n"
+            mensaje += f" 🔴 *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
     else:
         mensaje += " • No se registraron anomalías de volumen institucional en este ciclo.\n"
 
