@@ -1,17 +1,49 @@
 import os
-import random
 import requests
-from io import StringIO
-from datetime import datetime
-from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# Configuración de Telegram (lee los secretos configurados en GitHub Actions)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+def enviar_telegram(mensaje):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Credenciales de Telegram no configuradas.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": mensaje,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Error al enviar mensaje a Telegram: {e}")
 
 portafolio_base = [
-    'MU', 'CRDO', 'BE', 'IBM', 'RKLB', 'GLD', 'RTX', 'KLAC', 'SCHD', 
-    'FLEX', 'AMZN', 'VTV', 'LLY', 'VRT', 'CRWD', 'QQQM', 'GOOGL', 
+    'MU', 'CRDO', 'BE', 'IBM', 'RKLB', 'GLD', 'RTX', 'KLAC', 'SCHD',
+    'FLEX', 'AMZN', 'VTV', 'LLY', 'VRT', 'CRWD', 'QQQM', 'GOOGL',
     'VOO', 'NVDA', 'VST', 'MSFT', 'AVGO', 'CEG', 'ALAB', 'TSM', 'MELI'
 ]
+
+def obtener_noticia_relevante(ticker_symbol):
+    """Consulta los últimos titulares de la acción para detectar catalizadores cualitativos"""
+    try:
+        tk = yf.Ticker(ticker_symbol)
+        noticias = tk.news
+        if not noticias:
+            return None
+        # Retorna el título de la noticia más reciente
+        ultima = noticias[0]
+        # Dependiendo de la estructura de yfinance, el título puede estar en 'title' o dentro de 'content'
+        titulo = ultima.get('title') or ultima.get('content', {}).get('title')
+        return titulo
+    except Exception as e:
+        return None
 
 def barrido_mercado_global():
     tickers_encontrados = set()
@@ -20,78 +52,82 @@ def barrido_mercado_global():
         'https://en.wikipedia.org/wiki/List_of_NASDAQ-100_components'
     ]
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    
+
     for u in urls:
         try:
-            r = requests.get(u, headers=headers, timeout=8)
-            if r.status_code == 200:
-                df = pd.read_html(StringIO(r.text))[0]
-                col = 'Symbol' if 'Symbol' in df.columns else ('Ticker' if 'Ticker' in df.columns else df.columns[0])
-                for s in df[col].astype(str):
-                    clean_s = s.split()[0].replace('.', '-').upper()
-                    if clean_s.isalpha() and len(clean_s) <= 5:
-                        tickers_encontrados.add(clean_s)
-        except Exception:
-            continue
-            
-    try:
-        r2 = requests.get('https://query1.finance.yahoo.com/v1/finance/screener/predefined/generated_s_most_actives', headers=headers, timeout=5)
-        if r2.status_code == 200:
-            data_json = r2.json().get('finance', {}).get('result', [{}])
-            if data_json and len(data_json) > 0:
-                quotes = data_json[0].get('quotes', [])
-                for q in quotes:
-                    sym = q.get('symbol')
-                    if sym and '.' not in sym and sym.isalpha() and len(sym) <= 5:
-                        tickers_encontrados.add(sym.upper())
-    except Exception:
-        pass
+            df_list = pd.read_html(u, storage_options={'User-Agent': 'Mozilla/5.0'})
+            for df in df_list:
+                for col in ['Symbol', 'Ticker']:
+                    if col in df.columns:
+                        symbols = df[col].astype(str).str.replace('.', '-', regex=False).tolist()
+                        tickers_encontrados.update(symbols)
+                        break
+        except Exception as e:
+            print(f"Error al leer Wikipedia ({u}): {e}")
 
-    return list(tickers_encontrados)
+    # Combinar Wikipedia con tu portafolio base personalizado
+    universo = sorted(list(tickers_encontrados.union(set(portafolio_base))))
+    
+    resultados = []
+    print(f"Analizando un universo de {len(universo)} activos...")
 
-universo_global = barrido_mercado_global()
-candidatos_externos = [s for s in universo_global if s not in portafolio_base]
-random.shuffle(candidatos_externos)
+    for ticker in universo:
+        try:
+            tk = yf.Ticker(ticker)
+            # Descargamos los últimos ~70 días para calcular la media móvil de 65 ruedas
+            hist = tk.history(period="3m")
+            if hist is None or len(hist) < 65:
+                continue
 
-cupo_autonomo = candidatos_externos[:max(0, 50 - len(portafolio_base))]
-tickers_a_probar = list(set(portafolio_base + cupo_autonomo))
+            volumen_actual = hist['Volume'].iloc[-1]
+            ma_volumen_65 = hist['Volume'].iloc[-65:-1].mean()
 
-activos_detectados = []
+            if ma_volumen_65 > 0:
+                ratio = volumen_actual / ma_volumen_65
+                precio_cierre = hist['Close'].iloc[-1]
 
-for t in tickers_a_probar:
-    try:
-        df = yf.download(t, period='4mo', interval='1d', progress=False)
-        if not df.empty and 'Close' in df.columns and 'Volume' in df.columns:
-            if isinstance(df.columns, pd.MultiIndex): 
-                df.columns = df.columns.get_level_values(0)
-            
-            df = df.dropna(subset=['Close', 'Volume']).sort_index(ascending=False)
-            
-            if len(df) >= 66:
-                cierre = float(df['Close'].iloc[0])
-                v_act = float(df['Volume'].iloc[0])
-                v_prom = float(df['Volume'].iloc[1:66].mean())
-                
-                vr = (v_act / v_prom) if v_prom > 0 else 1.0
-                
-                if vr > 1.2:
-                    es_base = '⭐ ' if t in portafolio_base else '   '
-                    activos_detectados.append({
-                        'ticker': f'{es_base}{t}',
-                        'precio': round(cierre, 2),
-                        'vr': round(vr, 2)
+                # Filtro de anomalía de volumen institucional (> 1.2x)
+                if ratio >= 1.2:
+                    noticia = obtener_noticia_relevante(ticker)
+                    resultados.append({
+                        'ticker': ticker,
+                        'precio': precio_cierre,
+                        'ratio': ratio,
+                        'noticia': noticia
                     })
-    except Exception:
-        pass
+        except Exception as e:
+            # Ignoramos errores puntuales de tickers deslistados o sin datos
+            continue
 
-hora_peru = datetime.now(ZoneInfo('America/Lima')).strftime('%H:%M:%S')
+    return resultados
 
-if activos_detectados:
-    activos_detectados = sorted(activos_detectados, key=lambda x: x['vr'], reverse=True)
-    msg = f'🚨 *ALERTA GLOBAL AUTÓNOMA (>1.2x)* 🚨\n⏰ Hora Lima: {hora_peru}\n\n'
-    for item in activos_detectados:
-        msg += f"🔴 `{item['ticker']}` | ${item['precio']} | Vol 3M: *{item['vr']}x*\n"
-else:
-    msg = f'📊 *IAIT MONITOR GLOBAL* 📊\n⏰ Hora Lima: {hora_peru}\n\nSin activos cumpliendo el umbral rojo (>1.2x) en este ciclo.'
+def main():
+    peru_tz = ZoneInfo("America/Lima")
+    ahora_peru = datetime.now(peru_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-requests.post('https://api.telegram.org/bot8929263014:AAG5oHs5tp6znS5EqKHejlV62z6cEgGo12k/sendMessage', json={'chat_id': '8596315311', 'text': msg, 'parse_mode': 'Markdown'})
+    anomalias = barrido_mercado_global()
+
+    if anomalias:
+        # Ordenar de mayor a menor ratio de volumen
+        anomalias = sorted(anomalias, key=lambda x: x['ratio'], reverse=True)
+        
+        mensaje = f"🚨 *ALERTA HÍBRIDA AUTÓNOMA (>1.2x)* 🚨\n"
+        mensaje += f"⏱ Hora Lima: {ahora_peru}\n\n"
+
+        for item in anomalias:
+            t = item['ticker']
+            p = item['precio']
+            r = item['ratio']
+            noticia = item['noticia']
+
+            mensaje += f"🔴 ⭐ *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
+            if noticia:
+                mensaje += f"   📰 *Catalizador:* _{noticia}_\n"
+            mensaje += "\n"
+    else:
+        mensaje = f"🔍 *Escaneo Híbrido Completado*\n⏱ Hora Lima: {ahora_peru}\nNo se registraron anomalías de volumen institucional (>1.2x) en este ciclo."
+
+    enviar_telegram(mensaje)
+
+if __name__ == "__main__":
+    main()
