@@ -1,4 +1,5 @@
 import os
+import random
 import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
@@ -26,13 +27,27 @@ def enviar_telegram(mensaje):
     except Exception as e:
         print(f"Error al despachar mensaje a Telegram: {e}")
 
-# 2. UNIVERSO DE ACTIVOS DE ALTA LIQUIDEZ Y COMPONENTES CLAVE
-universo = [
-    'MU', 'CRDO', 'BE', 'IBM', 'RKLB', 'GLD', 'RTX', 'KLAC', 'SCHD',
-    'FLEX', 'AMZN', 'VTV', 'LLY', 'VRT', 'CRWD', 'QQQM', 'GOOGL',
-    'VOO', 'NVDA', 'VST', 'MSFT', 'AVGO', 'CEG', 'ALAB', 'TSM', 'MELI',
-    'AAPL', 'META', 'TSLA', 'NFLX', 'AMD', 'INTC', 'JPM', 'XOM', 'CVX'
+# 2. TU PORTAFOLIO OFICIAL (Base obligatoria de escaneo)
+portafolio_usuario = [
+    'CEG', 'ALAB', 'CRDO', 'BE', 'KLAC', 'GLD', 'MU', 'VST', 'VRT', 
+    'RKLB', 'AVGO', 'GOOGL', 'TSM', 'QQQM', 'FLEX', 'VTV', 'MELI', 
+    'SCHD', 'AMZN', 'VOO', 'LLY', 'NVDA', 'MSFT', 'CRWD'
 ]
+
+# Pool complementario de alta liquidez para completar dinámicamente hasta 50 activos
+pool_complementario = [
+    'AAPL', 'META', 'TSLA', 'NFLX', 'AMD', 'INTC', 'JPM', 'XOM', 'CVX',
+    'IBM', 'RTX', 'TQQQ', 'ARKK', 'SQ', 'COIN', 'SHOP', 'BA', 'DIS',
+    'PYPL', 'ADBE', 'CRM', 'QCOM', 'TXN', 'INTU', 'AMAT', 'LMT', 'GE'
+]
+
+def obtener_universo_operativo():
+    """Combina estrictamente tu portafolio con una selección aleatoria para completar 50 activos."""
+    # Aseguramos que no se repitan elementos
+    extras_necesarios = max(0, 50 - len(portafolio_usuario))
+    seleccion_dinamica = random.sample(pool_complementario, min(extras_necesarios, len(pool_complementario)))
+    universo_total = list(set(portafolio_usuario + seleccion_dinamica))
+    return universo_total
 
 # 3. MÓDULO DE TRADUCCIÓN AUTOMÁTICA AL ESPAÑOL
 def traducir_texto(texto):
@@ -52,15 +67,17 @@ def traducir_texto(texto):
         pass
     return texto
 
-# 4. CAPA MACRO / CATALIZADORES GLOBALES INDEPENDIENTES
-def obtener_catalizadores_macro():
-    """Extrae noticias macroeconómicas, geopolíticas y de mercado global/regional sin amarrarlas a un ticker."""
+# 4. CAPA DE CATALIZADORES ESTRATÉGICOS Y SECTORIALES
+def obtener_catalizadores_estrategicos():
+    """Busca eventos de alto impacto, M&A, contratos y macroeconomía regional."""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     queries = [
-        "stock market economy news",
-        "Latin America markets election economy"
+        "merger acquisition stock deal buyout",
+        "FDA approval biotech clinical trial stock",
+        "energy contract AI data center stock",
+        "Latin America market economy stock"
     ]
     catalizadores = []
     
@@ -70,7 +87,7 @@ def obtener_catalizadores_macro():
             resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.content, 'xml')
-                items = soup.find_all('item', limit=2)
+                items = soup.find_all('item', limit=1)
                 for item in items:
                     if item.title:
                         titulo = item.title.text.strip()
@@ -80,12 +97,12 @@ def obtener_catalizadores_macro():
         except Exception:
             continue
             
-    return catalizadores[:3] # Retorna los 3 principales catalizadores macro del día
+    return catalizadores[:3]
 
-# 5. CAPA CUANTITATIVA DE BARRIDO DE MERCADO (VOLUMEN INSTITUCIONAL)
-def barrido_mercado_global():
+# 5. CAPA CUANTITATIVA DE BARRIDO DE MERCADO
+def barrido_mercado_global(universo):
     resultados = []
-    print(f"Iniciando auditoría cuantitativa sobre {len(universo)} activos...")
+    print(f"Iniciando auditoría cuantitativa sobre un universo combinado de {len(universo)} activos...")
 
     for ticker in universo:
         try:
@@ -102,10 +119,12 @@ def barrido_mercado_global():
                 precio_cierre = hist['Close'].iloc[-1]
 
                 if ratio >= 1.2:
+                    es_portafolio = "⭐ (Tu Portafolio)" if ticker in portafolio_usuario else "⚡ (Dinámico)"
                     resultados.append({
                         'ticker': ticker,
                         'precio': precio_cierre,
-                        'ratio': ratio
+                        'ratio': ratio,
+                        'etiqueta': es_portafolio
                     })
         except Exception as e:
             print(f"Advertencia procesando ticker {ticker}: {e}")
@@ -118,23 +137,23 @@ def main():
     peru_tz = ZoneInfo("America/Lima")
     ahora_peru = datetime.now(peru_tz).strftime("%Y-%m-%d %H:%M:%S")
 
-    # Ejecución de ambas capas de forma independiente
-    macro_noticias = obtener_catalizadores_macro()
-    anomalias = barrido_mercado_global()
+    universo_actual = obtener_universo_operativo()
+    estrategicos = obtener_catalizadores_estrategicos()
+    anomalias = barrido_mercado_global(universo_actual)
 
     mensaje = f"🚨 *REPORTE DE INTELIGENCIA DE MERCADO* 🚨\n"
     mensaje += f"⏱ Hora Lima: {ahora_peru}\n\n"
 
-    # Sección 1: Entorno Macro / Catalizadores Globales
-    mensaje += "🌐 *Catalizadores Macro / Globales:*\n"
-    if macro_noticias:
-        for noticia in macro_noticias:
+    # Sección 1: Catalizadores Estratégicos y Sectoriales
+    mensaje += "🎯 *Catalizadores Estratégicos y Sectoriales:*\n"
+    if estrategicos:
+        for noticia in estrategicos:
             mensaje += f" • 📰 _{noticia}_\n"
     else:
-        mensaje += " • Sin eventos macro críticos destacados en este ciclo.\n"
+        mensaje += " • Sin eventos corporativos extraordinarios en este ciclo.\n"
     mensaje += "\n"
 
-    # Sección 2: Anomalías Cuantitativas de Volumen (>1.2x)
+    # Sección 2: Anomalías Cuantitativas (>1.2x)
     mensaje += "📊 *Anomalías de Volumen Institucional (>1.2x):*\n"
     if anomalias:
         anomalias = sorted(anomalias, key=lambda x: x['ratio'], reverse=True)
@@ -142,7 +161,8 @@ def main():
             t = item['ticker']
             p = item['precio']
             r = item['ratio']
-            mensaje += f" 🔴 ⭐ *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
+            tag = item['etiqueta']
+            mensaje += f" 🔴 *{t}* {tag} | ${p:.2f} | Vol 3M: {r:.2f}x\n"
     else:
         mensaje += " • No se registraron anomalías de volumen institucional en este ciclo.\n"
 
