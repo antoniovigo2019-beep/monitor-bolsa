@@ -10,7 +10,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def enviar_telegram(mensaje):
-    """Envía el reporte formateado a Telegram asegurando manejo de errores HTTP."""
+    """Envía el reporte estructurado a Telegram con control de errores."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Error crítico: Credenciales de Telegram no configuradas en GitHub Secrets.")
         return
@@ -36,8 +36,8 @@ universo = [
 
 # 3. MÓDULO DE TRADUCCIÓN AUTOMÁTICA AL ESPAÑOL
 def traducir_texto(texto):
-    """Traduce de forma gratuita y rápida un titular al español usando el servicio público de MyMemory."""
-    if not texto or "Sin catalizador" in texto:
+    """Traduce titulares al español mediante la API pública de MyMemory."""
+    if not texto:
         return texto
     try:
         url = "https://api.mymemory.translated.net/get"
@@ -50,56 +50,42 @@ def traducir_texto(texto):
                 return traduccion
     except Exception:
         pass
-    return texto  # Si falla por red, devuelve el original en inglés como respaldo
+    return texto
 
-# 4. MOTOR CUALITATIVO DE NOTICIAS CON DOBLE REDUNDANCIA
-def obtener_noticia_relevante(ticker_symbol):
-    """Busca el catalizador del día mediante feeds RSS públicos y traduce el resultado."""
+# 4. CAPA MACRO / CATALIZADORES GLOBALES INDEPENDIENTES
+def obtener_catalizadores_macro():
+    """Extrae noticias macroeconómicas, geopolíticas y de mercado global/regional sin amarrarlas a un ticker."""
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-
-    titulo_encontrado = None
-
-    # Intento 1: Yahoo Finance RSS
-    try:
-        url_yahoo = f"https://finance.yahoo.com/rss/headline?s={ticker_symbol}"
-        resp = requests.get(url_yahoo, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.content, 'xml')
-            item = soup.find('item')
-            if item and item.title:
-                titulo = item.title.text.strip()
-                if titulo:
-                    titulo_encontrado = titulo
-    except Exception:
-        pass
-
-    # Intento 2: Google News RSS (Respaldo)
-    if not titulo_encontrado:
+    queries = [
+        "stock market economy news",
+        "Latin America markets election economy"
+    ]
+    catalizadores = []
+    
+    for q in queries:
         try:
-            url_google = f"https://news.google.com/rss/search?q={ticker_symbol}+stock&hl=en-US&gl=US&ceid=US:en"
-            resp = requests.get(url_google, headers=headers, timeout=5)
+            url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en"
+            resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.content, 'xml')
-                item = soup.find('item')
-                if item and item.title:
-                    titulo = item.title.text.strip()
-                    if titulo:
-                        titulo_encontrado = titulo
+                items = soup.find_all('item', limit=2)
+                for item in items:
+                    if item.title:
+                        titulo = item.title.text.strip()
+                        traducido = traducir_texto(titulo)
+                        if traducido and traducido not in catalizadores:
+                            catalizadores.append(traducido)
         except Exception:
-            pass
+            continue
+            
+    return catalizadores[:3] # Retorna los 3 principales catalizadores macro del día
 
-    if titulo_encontrado:
-        # Traducimos el titular al español antes de retornarlo
-        return traducir_texto(titulo_encontrado)
-
-    return "Sin catalizador reciente detectado en feeds públicos"
-
-# 5. MOTOR CUANTITATIVO DE BARRIDO DE MERCADO
+# 5. CAPA CUANTITATIVA DE BARRIDO DE MERCADO (VOLUMEN INSTITUCIONAL)
 def barrido_mercado_global():
     resultados = []
-    print(f"Iniciando auditoría sobre un universo de {len(universo)} activos...")
+    print(f"Iniciando auditoría cuantitativa sobre {len(universo)} activos...")
 
     for ticker in universo:
         try:
@@ -116,12 +102,10 @@ def barrido_mercado_global():
                 precio_cierre = hist['Close'].iloc[-1]
 
                 if ratio >= 1.2:
-                    noticia = obtener_noticia_relevante(ticker)
                     resultados.append({
                         'ticker': ticker,
                         'precio': precio_cierre,
-                        'ratio': ratio,
-                        'noticia': noticia
+                        'ratio': ratio
                     })
         except Exception as e:
             print(f"Advertencia procesando ticker {ticker}: {e}")
@@ -129,29 +113,38 @@ def barrido_mercado_global():
 
     return resultados
 
-# 6. ORQUESTADOR PRINCIPAL
+# 6. ORQUESTADOR PRINCIPAL DEL REPORTE HÍBRIDO
 def main():
     peru_tz = ZoneInfo("America/Lima")
     ahora_peru = datetime.now(peru_tz).strftime("%Y-%m-%d %H:%M:%S")
 
+    # Ejecución de ambas capas de forma independiente
+    macro_noticias = obtener_catalizadores_macro()
     anomalias = barrido_mercado_global()
 
+    mensaje = f"🚨 *REPORTE DE INTELIGENCIA DE MERCADO* 🚨\n"
+    mensaje += f"⏱ Hora Lima: {ahora_peru}\n\n"
+
+    # Sección 1: Entorno Macro / Catalizadores Globales
+    mensaje += "🌐 *Catalizadores Macro / Globales:*\n"
+    if macro_noticias:
+        for noticia in macro_noticias:
+            mensaje += f" • 📰 _{noticia}_\n"
+    else:
+        mensaje += " • Sin eventos macro críticos destacados en este ciclo.\n"
+    mensaje += "\n"
+
+    # Sección 2: Anomalías Cuantitativas de Volumen (>1.2x)
+    mensaje += "📊 *Anomalías de Volumen Institucional (>1.2x):*\n"
     if anomalias:
         anomalias = sorted(anomalias, key=lambda x: x['ratio'], reverse=True)
-        
-        mensaje = f"🚨 *ALERTA HÍBRIDA AUTÓNOMA (>1.2x)* 🚨\n"
-        mensaje += f"⏱ Hora Lima: {ahora_peru}\n\n"
-
         for item in anomalias:
             t = item['ticker']
             p = item['precio']
             r = item['ratio']
-            noticia = item['noticia']
-
-            mensaje += f"🔴 ⭐ *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
-            mensaje += f"   📰 *Catalizador:* _{noticia}_\n\n"
+            mensaje += f" 🔴 ⭐ *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
     else:
-        mensaje = f"🔍 *Escaneo Híbrido Completado*\n⏱ Hora Lima: {ahora_peru}\nNo se registraron anomalías de volumen institucional (>1.2x) en este ciclo."
+        mensaje += " • No se registraron anomalías de volumen institucional en este ciclo.\n"
 
     enviar_telegram(mensaje)
 
