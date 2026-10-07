@@ -33,14 +33,17 @@ universo = [
 ]
 
 def obtener_noticia_relevante(ticker_symbol):
-    """Consulta los últimos titulares de la acción para detectar catalizadores"""
+    """Consulta mejorada para extraer el último titular disponible de la acción"""
     try:
         tk = yf.Ticker(ticker_symbol)
-        noticias = tk.news
+        noticias = getattr(tk, 'news', None)
         if not noticias:
             return None
+        
         ultima = noticias[0]
         titulo = ultima.get('title') or ultima.get('content', {}).get('title')
+        if not titulo:
+            return None
         return titulo
     except Exception:
         return None
@@ -52,7 +55,7 @@ def barrido_mercado_global():
     for ticker in universo:
         try:
             tk = yf.Ticker(ticker)
-            # Usamos '90d' exactos para evitar errores de sintaxis en yfinance
+            # Usamos '90d' exactos para cumplir con los filtros de yfinance
             hist = tk.history(period="90d")
             if hist is None or len(hist) < 65:
                 continue
