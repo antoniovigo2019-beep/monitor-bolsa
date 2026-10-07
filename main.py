@@ -33,19 +33,21 @@ universo = [
 ]
 
 def obtener_noticia_relevante(ticker_symbol):
-    """Consulta mejorada para extraer el último titular disponible de la acción"""
+    """Extrae de manera robusta el último titular de noticias disponible"""
     try:
         tk = yf.Ticker(ticker_symbol)
         noticias = getattr(tk, 'news', None)
-        if not noticias:
+        if not noticias or len(noticias) == 0:
             return None
         
-        ultima = noticias[0]
-        titulo = ultima.get('title') or ultima.get('content', {}).get('title')
-        if not titulo:
-            return None
-        return titulo
-    except Exception:
+        # Probamos diferentes llaves donde yfinance suele almacenar el título
+        for item in noticias:
+            titulo = item.get('title') or item.get('content', {}).get('title')
+            if titulo:
+                return titulo
+        return None
+    except Exception as e:
+        print(f"Error extrayendo noticias para {ticker_symbol}: {e}")
         return None
 
 def barrido_mercado_global():
@@ -55,7 +57,6 @@ def barrido_mercado_global():
     for ticker in universo:
         try:
             tk = yf.Ticker(ticker)
-            # Usamos '90d' exactos para cumplir con los filtros de yfinance
             hist = tk.history(period="90d")
             if hist is None or len(hist) < 65:
                 continue
@@ -101,6 +102,8 @@ def main():
             mensaje += f"🔴 ⭐ *{t}* | ${p:.2f} | Vol 3M: {r:.2f}x\n"
             if noticia:
                 mensaje += f"   📰 *Catalizador:* _{noticia}_\n"
+            else:
+                mensaje += f"   📰 *Catalizador:* _Sin noticias recientes en el feed_\n"
             mensaje += "\n"
     else:
         mensaje = f"🔍 *Escaneo Híbrido Completado*\n⏱ Hora Lima: {ahora_peru}\nNo se registraron anomalías de volumen institucional (>1.2x) en este ciclo."
