@@ -1,9 +1,9 @@
 name: Auto Scanner Bolas Global
 
 on:
-  schedule:
-    - cron: '0 14-21 * * 1-5'
   workflow_dispatch:
+  schedule:
+    - cron: '0 14 * * 1-5' # Lunes a viernes
 
 jobs:
   run-scanner:
@@ -19,8 +19,11 @@ jobs:
 
       - name: Instalar dependencias
         run: |
-          pip install requests pandas yfinance lxml html5lib
+          python -m pip install --upgrade pip
+          pip install pandas yfinance requests lxml
 
       - name: Ejecutar script autónomo
-        run: |
-          python main.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
