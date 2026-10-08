@@ -1,0 +1,38 @@
+name: IAIT Monitor
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    - cron: "30 14 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: iait
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Ejecutar IAIT
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PORTFOLIO_TICKERS: ${{ secrets.PORTFOLIO_TICKERS }}
+          EXTRA_TICKERS: ${{ secrets.EXTRA_TICKERS }}
+          EXCLUDE_TICKERS: ${{ secrets.EXCLUDE_TICKERS }}
+        run: python monitor.py
+      - name: Guardar estado
+        if: always()
+        run: |
+          git config user.name "iait-bot"
+          git config user.email "iait-bot@users.noreply.github.com"
+          [ -f state.json ] && git add state.json
+          git diff --cached --quiet || git commit -q -m "estado"
+          for i in 1 2 3 4; do git pull --rebase -q && git push -q && break || sleep $((i*5)); done
