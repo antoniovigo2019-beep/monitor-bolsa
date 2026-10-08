@@ -63,8 +63,6 @@ def obtener_catalizadores_macro():
     return catalizadores[:3]
 
 def generar_universo_libre():
-    """Genera de manera completamente dinámica y libre una selección de activos del mercado global."""
-    # Amplio abanico de tickers globales para exploración abierta
     pool_global = [
         'PENG', 'CEG', 'ALAB', 'CRDO', 'BE', 'KLAC', 'GLD', 'MU', 'VST', 'VRT', 
         'RKLB', 'AVGO', 'GOOGL', 'TSM', 'QQQM', 'FLEX', 'VTV', 'MELI', 'SCHD', 
@@ -74,7 +72,6 @@ def generar_universo_libre():
         'INTU', 'AMAT', 'LMT', 'GE', 'PLTR', 'MRVL', 'ARM', 'SMCI', 'ENPH', 'FSLR', 
         'CELH', 'HOOD', 'RDDT', 'PFE', 'JNJ', 'XPEV', 'NIO', 'BABA', 'PDD', 'VALE', 'PBR'
     ]
-    # Selecciona de forma libre hasta 50 activos aleatorios para el escaneo
     return random.sample(pool_global, min(50, len(pool_global)))
 
 def barrido_cuantitativo():
@@ -88,11 +85,11 @@ def barrido_cuantitativo():
             hist = tk.history(period="90d")
             if hist is None or len(hist) < 65:
                 continue
-            volumen_actual = hist['Volume'].iloc[-1]
-            ma_volumen_65 = hist['Volume'].iloc[-65:-1].mean()
+            volumen_actual = float(hist['Volume'].iloc[-1])
+            ma_volumen_65 = float(hist['Volume'].iloc[-65:-1].mean())
             if ma_volumen_65 > 0:
                 ratio = volumen_actual / ma_volumen_65
-                precio_cierre = hist['Close'].iloc[-1]
+                precio_cierre = float(hist['Close'].iloc[-1])
                 if ratio >= 1.2:
                     resultados.append({
                         'ticker': ticker,
