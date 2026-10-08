@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>IAIT Monitor</title>
+<style>
+:root{--bg:#080d16;--p:#0f1624;--l:#1d2940;--tx:#d8e0ee;--m:#8593ad;--up:#2fd18a;--dn:#e5586a}
+*{box-sizing:border-box}body{margin:0 auto;max-width:980px;padding:12px;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1{font-size:20px;margin:4px 0}h2{font-size:13px;color:var(--m);margin:0 0 8px;font-weight:600}.m{color:var(--m);font-size:12px}
+.card{background:var(--p);border:1px solid var(--l);border-radius:6px;padding:12px;margin:10px 0}
+.g2{display:grid;gap:12px;grid-template-columns:1fr}@media(min-width:700px){.g2{grid-template-columns:1fr 1fr}}
+svg{width:100%;display:block}.ax{fill:#8593ad;font-size:10px}#gauge{max-width:280px;margin:auto}
+.bar{height:8px;background:#0a111d;border-radius:4px;overflow:hidden;margin-top:3px}.bar i{display:block;height:100%}
+.vr{display:flex;justify-content:space-between;font-size:12px;color:var(--m);margin-top:9px}
+#tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:4px}
+.tile{border:0;border-radius:4px;padding:6px 2px;color:#07101c;font:inherit;font-size:11px;display:flex;flex-direction:column;align-items:center;cursor:pointer}.tile b{font-size:12px}
+.w{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 4px;border-top:1px solid var(--l);text-align:right;white-space:nowrap}
+th{color:var(--m);cursor:pointer;font-weight:600}td:first-child,th:first-child{text-align:left}td small{display:block;color:var(--m);font-size:10px}tr[data-s]{cursor:pointer}
+.sp{width:80px;height:24px}.up{color:var(--up)}.dn{color:var(--dn)}
+button,input{background:#14203a;border:1px solid var(--l);color:var(--tx);border-radius:4px;padding:6px 10px;font:inherit;font-size:12px}
+.chip{display:inline-block;margin:2px 4px 2px 0;padding:2px 9px;border-radius:10px;font-size:12px;color:#07101c;font-weight:700}
+</style></head><body>
+<h1>IAIT Monitor</h1><div class="m" id="st"></div>
+<section class="card g2"><div><svg id="gauge" viewBox="0 0 200 110"></svg><div id="lv" style="text-align:center;font-weight:700;margin-top:4px"></div><div id="hz" class="m" style="text-align:center"></div></div><div id="vars"></div></section>
+<section class="card"><h2>Mapa de volumen · rojo = más de 1,2x el promedio · toca un ticker</h2><div id="chips"></div><div id="tiles"></div></section>
+<section class="card g2"><div><h2>IAIT (líneas: amarilla 65, verde 77)</h2><svg id="g1"></svg></div><div><h2>DIX % (línea: 45)</h2><svg id="g2"></svg></div><div><h2>VIX / VIX3M (línea: 1,0)</h2><svg id="g3"></svg></div><div><h2>Volumen relativo vs cambio del día</h2><svg id="sc"></svg></div></section>
+<section class="card" id="det" hidden><h2 id="dh"></h2><svg id="dc"></svg><div class="m">Blanco: precio · color: EMA20 (60 sesiones)</div></section>
+<section class="card"><h2>Todas las acciones</h2>
+<div style="margin-bottom:8px"><button data-g="*">Todas</button> <button data-g="P">Cartera</button> <button data-g="F">Fijas</button> <button data-g="R">Radar</button> <input id="q" placeholder="Buscar ticker" style="width:120px"></div>
+<div class="w"><table><thead><tr><th data-k="s">Ticker</th><th data-k="p">Precio</th><th data-k="c">1d</th><th data-k="r">RSI5</th><th data-k="a">RVOL</th><th data-k="l">Alerta</th><th>60d</th></tr></thead><tbody id="tb"></tbody></table></div></section>
+<section class="card"><h2>Cambiar mis tickers</h2><p class="m">En GitHub: Settings → Secrets and variables → Actions → edita <b>PORTFOLIO_TICKERS</b> (cartera), <b>EXTRA_TICKERS</b> (fijas) o <b>EXCLUDE_TICKERS</b> (nunca sugerir). Se aplica en la siguiente corrida.</p></section>
+<script>
+const D=__DATA__;
+const C={GREEN:"#2fd18a",PRE_GREEN:"#8fd14f",YELLOW:"#f0b63a",RED:"#e5586a",NEUTRAL:"#7d8ba5"},L={GREEN:"VERDE",PRE_GREEN:"PRE-VERDE",YELLOW:"AMARILLA",RED:"ROJA",NEUTRAL:"SIN SEÑAL"};
+const $=s=>document.querySelector(s),f=(x,d=1)=>(+x).toFixed(d),sg=x=>(x>=0?"+":"")+f(x,1)+"%";
+function line(el,ser,refs=[],h=90,w=320){
+ const all=ser.flatMap(s=>s.v).filter(Number.isFinite).concat(refs.map(r=>r.y));
+ if(!all.length){el.innerHTML="";return}
+ let lo=Math.min(...all),hi=Math.max(...all);const p=(hi-lo)*.1||1;lo-=p;hi+=p;
+ const X=(i,n)=>n<2?0:i/(n-1)*w,Y=v=>h-(v-lo)/(hi-lo)*h;
+ el.setAttribute("viewBox",`0 0 ${w} ${h}`);
+ el.innerHTML=refs.map(r=>`<line x1="0" x2="${w}" y1="${Y(r.y)}" y2="${Y(r.y)}" stroke="${r.c}" stroke-dasharray="3 3" opacity=".7"/>`).join("")+
+ ser.map(s=>`<polyline fill="none" stroke="${s.c}" stroke-width="2" points="${s.v.map((v,i)=>Number.isFinite(v)?X(i,s.v.length)+","+Y(v):"").filter(Boolean).join(" ")}"/>`).join("");
+}
+function head(){const m=D.mkt,col=C[m.lvl]||C.NEUTRAL,s=m.score==null?0:m.score;
+ $("#st").textContent=D.stamp+" · "+D.note;
+ $("#gauge").innerHTML=`<path d="M10 100A90 90 0 0 1 190 100" fill="none" stroke="#1d2940" stroke-width="14"/><path d="M10 100A90 90 0 0 1 190 100" fill="none" stroke="${col}" stroke-width="14" stroke-dasharray="${s/100*283} 283"/><text x="100" y="92" text-anchor="middle" font-size="40" font-weight="700" fill="${col}">${m.score==null?"N/D":Math.round(s)}</text>`;
+ $("#lv").style.color=col;$("#lv").textContent="ALERTA "+L[m.lvl];$("#hz").textContent=m.txt;
+ $("#vars").innerHTML="<h2>Variables del IAIT (0-100)</h2>"+m.vars.map(v=>`<div class="vr"><span>${v.n} · peso ${v.w}%</span><span>${Math.round(v.s)}</span></div><div class="bar"><i style="width:${v.s}%;background:${v.s>=65?C.GREEN:v.s>=40?C.YELLOW:C.RED}"></i></div>`).join("");
+ const n=l=>D.t.filter(t=>t.l==l).length;
+ $("#chips").innerHTML=["GREEN","YELLOW","RED"].map(l=>`<span class="chip" style="background:${C[l]}">${n(l)} ${L[l].toLowerCase()}s</span>`).join("")+`<span class="m">de ${D.t.length}</span>`;
+ $("#tiles").innerHTML=[...D.t].sort((a,b)=>a.l.localeCompare(b.l)||b.c-a.c).map(t=>`<button class="tile" title="${t.s} ${sg(t.c)}" data-s="${t.s}" style="background:${C[t.l]};opacity:${.5+Math.min(Math.abs(t.c),4)/8}"><b>${t.s}</b><span>${f(t.a,1)}x</span></button>`).join("");
+ line($("#g1"),[{v:D.h.map(r=>r.iait),c:col}],[{y:65,c:C.YELLOW},{y:77,c:C.GREEN}]);
+ line($("#g2"),[{v:D.h.map(r=>r.dix),c:"#5aa7ff"}],[{y:45,c:C.GREEN}]);
+ line($("#g3"),[{v:D.h.map(r=>r.ts),c:"#c58bff"}],[{y:1,c:C.RED}]);
+}
+function scatter(){const w=320,h=240,pad=26,xs=D.t.map(t=>t.cmf),ys=D.t.map(t=>t.rs),ex=a=>[Math.min(...a,0),Math.max(...a,0)],[x0,x1]=ex(xs),[y0,y1]=ex(ys);
+ const X=v=>pad+(v-x0)/((x1-x0)||1)*(w-pad-8),Y=v=>h-pad-(v-y0)/((y1-y0)||1)*(h-pad-8);
+ $("#sc").setAttribute("viewBox",`0 0 ${w} ${h}`);
+ $("#sc").innerHTML=`<line x1="${X(0)}" x2="${X(0)}" y1="8" y2="${h-pad}" stroke="#2a3a58"/><line x1="${pad}" x2="${w-8}" y1="${Y(0)}" y2="${Y(0)}" stroke="#2a3a58"/>`+
+ D.t.map(t=>`<circle data-s="${t.s}" cx="${X(t.cmf)}" cy="${Y(t.rs)}" r="${3+Math.min(5,Math.max(0,Math.log10(Math.max(t.dv,1)/1e7)*2.5))}" fill="${C[t.l]}" fill-opacity=".8" stroke="#080d16"><title>${t.s}</title></circle>`).join("")+
+ `<text x="${w-8}" y="${h-8}" text-anchor="end" class="ax">Volumen relativo (x) →</text><text x="4" y="12" class="ax">↑ Cambio del día %</text>`}
+let so={k:"a",d:-1},gr="*",q="";
+function table(){const r=D.t.filter(t=>(gr=="*"||t.g==gr)&&t.s.includes(q.toUpperCase())).sort((a,b)=>(a[so.k]>b[so.k]?1:a[so.k]<b[so.k]?-1:0)*so.d);
+ $("#tb").innerHTML=r.map(t=>`<tr data-s="${t.s}"><td>${t.s}<small>${{P:"cartera",F:"fija",R:"radar"}[t.g]}</small></td><td>$${f(t.p,2)}</td><td class="${t.c>=0?"up":"dn"}">${sg(t.c)}</td><td>${f(t.r,0)}</td><td>${f(t.a,2)}x</td><td style="color:${C[t.l]}">${L[t.l]}</td><td><svg class="sp" data-sp="${t.s}"></svg></td></tr>`).join("");
+ r.forEach(t=>line(document.querySelector(`[data-sp="${t.s}"]`),[{v:t.cl.slice(-40),c:C[t.l]}],[],24,80))}
+function pick(s){const t=D.t.find(x=>x.s==s);if(!t)return;$("#det").hidden=false;
+ $("#dh").innerHTML=`<b style="color:#d8e0ee;font-size:15px">${t.s}</b> · <span style="color:${C[t.l]}">${L[t.l]}</span> · $${f(t.p,2)} (${sg(t.c)}) · RSI5 ${f(t.r,0)} · vs EMA20 ${sg(t.v)} · volumen ${f(t.a,2)}x el promedio`;
+ line($("#dc"),[{v:t.cl,c:"#d8e0ee"},{v:t.em,c:C[t.l]}],[],150);$("#det").scrollIntoView({behavior:"smooth"})}
+head();scatter();table();
+document.addEventListener("click",e=>{const s=e.target.closest&&e.target.closest("[data-s]");if(s)pick(s.dataset.s);
+ const g=e.target.closest&&e.target.closest("[data-g]");if(g){gr=g.dataset.g;table()}
+ const k=e.target.closest&&e.target.closest("th[data-k]");if(k){so={k:k.dataset.k,d:so.k==k.dataset.k?-so.d:-1};table()}});
+$("#q").addEventListener("input",e=>{q=e.target.value;table()});
+</script></body></html>
