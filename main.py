@@ -85,11 +85,19 @@ def barrido_cuantitativo():
             hist = tk.history(period="90d")
             if hist is None or len(hist) < 65:
                 continue
-            volumen_actual = float(hist['Volume'].iloc[-1])
-            ma_volumen_65 = float(hist['Volume'].iloc[-65:-1].mean())
+            
+            vol_val = hist['Volume'].iloc[-1]
+            volumen_actual = float(vol_val.item() if hasattr(vol_val, 'item') else vol_val)
+            
+            ma_val = hist['Volume'].iloc[-65:-1].mean()
+            ma_volumen_65 = float(ma_val.item() if hasattr(ma_val, 'item') else ma_val)
+            
             if ma_volumen_65 > 0:
                 ratio = volumen_actual / ma_volumen_65
-                precio_cierre = float(hist['Close'].iloc[-1])
+                
+                close_val = hist['Close'].iloc[-1]
+                precio_cierre = float(close_val.item() if hasattr(close_val, 'item') else close_val)
+                
                 if ratio >= 1.2:
                     resultados.append({
                         'ticker': ticker,
