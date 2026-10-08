@@ -1,7 +1,7 @@
 name: IAIT Monitor
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 */2 * * * *"
     - cron: "30 14 * * *"
   workflow_dispatch:
 permissions:
