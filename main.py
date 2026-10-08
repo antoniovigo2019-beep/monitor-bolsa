@@ -489,3 +489,4 @@ if __name__ == "__main__":
             tg(f"🛑 Falla en el sistema IAIT ({type(e).__name__}). Revisa Actions en GitHub.")
             s["_ERR_AT"] = lima_now().strftime("%Y-%m-%d-%H"); save_state(s)
         sys.exit(1)
+             
