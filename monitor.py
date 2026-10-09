@@ -380,7 +380,8 @@ def scan_news(port, st, manual):
         lines.append("   " + v["link"])
     if tg("\n".join(lines)):
         st["_NEWS"] = hashes  # si Telegram falla, se reintenta en la próxima corrida (no se pierden noticias)
-    return len(pick)
+        return len(pick)
+    return -1
 
 
 # ---------- IAIT (diario) ----------
@@ -430,7 +431,11 @@ def main():
     hourly = manual or (in_window and st.get("_SLOT") != slot)
     daily = manual or (now.hour * 60 + now.minute >= 570 and st.get("_DAILY") != today)
 
-    safe("noticias", lambda: scan_news(port, st, manual), st)
+    nslot = f"{today}-{now.hour // 2}"  # franjas de 2 h: 00-02, 02-04, ... 22-24 (hora Lima)
+    if manual or st.get("_NEWS_SLOT") != nslot:
+        n = safe("noticias", lambda: scan_news(port, st, manual), st)
+        if n is not None and n >= 0:
+            st["_NEWS_SLOT"] = nslot
     save_state(st)
 
     vol = None
